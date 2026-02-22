@@ -1,0 +1,3 @@
+[submodule "external/tokenhmr"]
+	path = external/tokenhmr
+	url = https://github.com/saidwivedi/TokenHMR.git
