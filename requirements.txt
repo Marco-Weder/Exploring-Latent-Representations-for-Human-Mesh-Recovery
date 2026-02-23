@@ -1,0 +1,40 @@
+# Core Infrastructure (Blackwell/RTX 5090 Native)
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.10.0+cu128
+torchvision==0.25.0+cu128
+torchaudio==2.10.0+cu128
+
+# Base Math & Data
+# Note: chumpy is removed here; install it via the manual command below
+numpy>=1.23.5,<1.24.0
+pandas>=2.0.0
+scipy
+chumpy==0.70
+
+# Thesis Specific (HMR Stack)
+pytorch-lightning>=1.8.6,<2.0.0
+smplx==0.1.28
+pyrender==0.1.45
+opencv-python
+yacs
+scikit-image
+einops
+timm
+dill
+
+# Training Tools
+rich
+hydra-core
+hydra-submitit-launcher
+hydra-colorlog
+pyrootutils
+webdataset>=0.2.100
+transformers>=4.40.0
+flatten_dict
+
+# External Git
+body_visualizer @ git+https://github.com/nghorbani/body_visualizer.git@5d0ac4615f32563f5dbd2f09c24aee75e3ae62ff
+
+# Build Tools
+setuptools>=70.0.0
+wheel
