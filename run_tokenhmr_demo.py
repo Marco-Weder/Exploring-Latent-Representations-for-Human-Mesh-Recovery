@@ -16,7 +16,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 submodule_root = os.path.abspath("external/tokenhmr")
 os.chdir(submodule_root)
 
-# CRITICAL FIX: Add the inner 'tokenhmr' folder to sys.path so 'import lib' works inside demo.py
+# Add the inner 'tokenhmr' folder to sys.path so 'import lib' works inside demo.py
 inner_tokenhmr = os.path.join(submodule_root, "tokenhmr")
 sys.path.insert(0, inner_tokenhmr)
 
@@ -24,5 +24,5 @@ sys.path.insert(0, inner_tokenhmr)
 import demo
 
 if __name__ == "__main__":
-    print("🚀 Running TokenHMR via Thesis Wrapper (PyTorch 2.6+ Safe Mode)...")
+    print("Running TokenHMR via Thesis Wrapper (PyTorch 2.6+ Safe Mode)...")
     demo.main()
