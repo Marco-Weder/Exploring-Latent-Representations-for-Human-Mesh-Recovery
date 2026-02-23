@@ -1,3 +1,6 @@
 [submodule "external/tokenhmr"]
 	path = external/tokenhmr
 	url = https://github.com/saidwivedi/TokenHMR.git
+[submodule "external/PHALP"]
+	url = https://github.com/brjathu/PHALP.git
+	path = external/PHALP
