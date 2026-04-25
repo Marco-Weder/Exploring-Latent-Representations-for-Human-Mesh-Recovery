@@ -68,7 +68,7 @@ def save_results_func(batch, output, results):
     return results
 
 
-def eval_pose_vqvae(hparams, val_loader, net, logger, writer, nb_iter, out_dir, val_disp_iter, best_scores):
+def eval_pose_vqvae(hparams, val_loader, net, logger, writer, nb_iter, out_dir, val_disp_iter, best_scores, optimizer=None, scheduler=None):
 
     net.eval()
     save_dir = join(out_dir, 'val_render')
@@ -120,6 +120,16 @@ def eval_pose_vqvae(hparams, val_loader, net, logger, writer, nb_iter, out_dir, 
     err_list['val/curr_mesh_recons'] *= 1000
     
     curr_score = err_list['val/curr_jnt_recons'] + err_list['val/curr_mesh_recons']
+    if optimizer is not None and scheduler is not None:
+        latest_dict = {
+            'net': net.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'scheduler': scheduler.state_dict(),
+            'iteration': nb_iter,
+            'hparams': hparams,
+        }
+        torch.save(latest_dict, join(out_dir, 'latest_checkpoint.pth'))
+
     if curr_score < best_scores['val/best_val_score']:
         best_scores['val/best_val_score'] = curr_score
         save_dict = {
@@ -127,6 +137,7 @@ def eval_pose_vqvae(hparams, val_loader, net, logger, writer, nb_iter, out_dir, 
             'hparams': hparams,
         }
         best_scores['val/best_iter'] = nb_iter
+        # Note: full training state (optimizer, scheduler, iteration) saved separately during training loop
         best_scores['val/best_jnt_recons']  = err_list['val/curr_jnt_recons']
         best_scores['val/best_mesh_recons'] = err_list['val/curr_mesh_recons']
         torch.save(save_dict, join(out_dir, 'best_net.pth'))

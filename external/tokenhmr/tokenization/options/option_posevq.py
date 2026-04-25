@@ -32,8 +32,7 @@ hparams.OPT = CN()
 hparams.OPT.TOTAL_ITER = 200000
 hparams.OPT.WARM_UP_ITER = 2
 hparams.OPT.LR = 2e-4
-hparams.OPT.LR_SCHEDULER = '75000_100000'
-hparams.OPT.GAMMA = 0.05
+hparams.OPT.MIN_LR = 1e-6
 hparams.OPT.WEIGHT_DECAY = 0.0
 
 hparams.LOSS = CN()

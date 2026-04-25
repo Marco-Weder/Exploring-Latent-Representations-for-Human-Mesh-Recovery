@@ -53,6 +53,12 @@ def main(hparams):
         name=hparams.EXP.NAME,          # Automatically names the run based on your config
         config=hparams                  # Saves all hyperparameters for easy filtering later
     )
+    if wandb.run is not None:
+        # Keep warmup and main-training charts separate in W&B.
+        wandb.define_metric("warmup/iter")
+        wandb.define_metric("warmup/*", step_metric="warmup/iter")
+        wandb.define_metric("tr/iter")
+        wandb.define_metric("tr/*", step_metric="tr/iter")
 
     ##### ---- Logger ---- #####
     logger = utils_model.get_logger(hparams.EXP.OUT_DIR)
@@ -81,6 +87,7 @@ def main(hparams):
         exit()
 
     ##### ------ resume training ------- #####
+    resume_start_iter = 0
     if hparams.EXP.RESUME_TRAINING:
         print(f'RESUME TRAINING: loading checkpoint from {hparams.EXP.RESUME_PTH}. Overiding architecture...')
         ckpt = torch.load(hparams.EXP.RESUME_PTH, map_location='cpu', weights_only=False)
@@ -89,6 +96,10 @@ def main(hparams):
         writer = get_loggers(hparams)
         net = get_model(pretrained_hparams, hparams.DATA.ADD_NOISE)
         net.load_state_dict(ckpt['net'], strict=True)
+        
+        # Extract training state from checkpoint if available
+        resume_start_iter = ckpt.get('iteration', 0)
+        print(f'  Resuming from iteration {resume_start_iter}')
 
     ##### ---- training from scratch ---- #####
     else:
@@ -101,7 +112,19 @@ def main(hparams):
     
     ##### ---- Optimizer & Scheduler ---- #####
     optimizer = optim.AdamW(net.parameters(), lr=hparams.OPT.LR, betas=(0.9, 0.99), weight_decay=hparams.OPT.WEIGHT_DECAY)
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=hparams.OPT.LR_SCHEDULER.split('_'), gamma=hparams.OPT.GAMMA)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=hparams.OPT.TOTAL_ITER,
+        eta_min=hparams.OPT.MIN_LR,
+    )
+    
+    # Restore optimizer and scheduler state if resuming
+    if hparams.EXP.RESUME_TRAINING and 'optimizer' in ckpt:
+        print(f'  Restoring optimizer and scheduler state...')
+        optimizer.load_state_dict(ckpt['optimizer'])
+        if 'scheduler' in ckpt:
+            scheduler.load_state_dict(ckpt['scheduler'])
+
     
     Loss = losses.PoseReConsLoss(hparams.LOSS, hparams.ARCH.NB_JOINTS, hparams.ARCH.ROT_TYPE, hparams.ARCH.SMPL_TYPE)
     best_scores = init_best_scores()
@@ -135,6 +158,19 @@ def main(hparams):
         loss.backward()
         optimizer.step()
 
+        if wandb.run is not None:
+            warmup_logs = {
+                'warmup/iter': nb_iter,
+                'warmup/lr': current_lr,
+                'warmup/curr_pose_recons': hparams.LOSS.POSE_LOSS_WT * loss_pose.item(),
+                'warmup/curr_mesh_recons': hparams.LOSS.MESH_LOSS_WT * loss_mesh.item(),
+                'warmup/curr_jnt_recons': hparams.LOSS.JNT_LOSS_WT * loss_jnts.item(),
+                'warmup/curr_perplexity': perplexity.item(),
+                'warmup/curr_commit': hparams.LOSS.COMMIT_LOSS_WT * loss_commit.item(),
+                'warmup/curr_loss': loss.item(),
+            }
+            wandb.log(warmup_logs)
+
         avg_recons += loss_pose.item()
         avg_perplexity += perplexity.item()
         avg_commit += loss_commit.item()
@@ -151,7 +187,7 @@ def main(hparams):
     ##### ---- Training ---- #####
     err_list = reset_err_list('tr')
 
-    for nb_iter in tqdm.tqdm(range(1, hparams.OPT.TOTAL_ITER + 1)):
+    for nb_iter in tqdm.tqdm(range(resume_start_iter + 1, hparams.OPT.TOTAL_ITER + 1)):
         
         batch = next(train_loader_iter)
         gt_pose = batch['gt_pose_body'].cuda().float() # (bs, 63)
@@ -186,9 +222,9 @@ def main(hparams):
                 err_list[key] /= hparams.EXP.PRINT_ITER
             
             log_dict = err_list.copy()
+            log_dict['tr/iter'] = nb_iter
             log_dict['tr/lr'] = scheduler.get_last_lr()[0]
             wandb.log(log_dict, step=nb_iter)
-            # -----------------------------
 
             print_str = f'Train. Iter {nb_iter}: lr: {scheduler.get_last_lr()[0]:.5f}'
             for key, value in err_list.items():
@@ -201,7 +237,19 @@ def main(hparams):
             visualize_from_mesh(hparams.ARCH.SMPL_TYPE, batch, output, nb_iter, save_dir) 
 
         if nb_iter % hparams.EXP.EVAL_ITER == 0:
-            best_scores = eval_pose_vqvae(hparams, val_loader, net, logger, writer, nb_iter, hparams.EXP.OUT_DIR, hparams.EXP.VAL_DISP_ITER, best_scores)
+            best_scores = eval_pose_vqvae(
+                hparams,
+                val_loader,
+                net,
+                logger,
+                writer,
+                nb_iter,
+                hparams.EXP.OUT_DIR,
+                hparams.EXP.VAL_DISP_ITER,
+                best_scores,
+                optimizer=optimizer,
+                scheduler=scheduler,
+            )
             
 
 if __name__ == '__main__':
@@ -216,6 +264,8 @@ if __name__ == '__main__':
     parser.add_argument('--gpu_min_mem', type=int, default=20000, help='minimum gpu mem')
     parser.add_argument('--exclude_nodes', type=str, default='', help='exclude the nodes from submitting')
     parser.add_argument('--num_cpus', type=int, default=8, help='num cpus for cluster')
+    parser.add_argument('--resume_training', default=False, action='store_true', help='resume training from checkpoint')
+    parser.add_argument('--resume_pth', type=str, default='', help='path to checkpoint for resuming training')
 
     args = parser.parse_args()
 
@@ -231,4 +281,10 @@ if __name__ == '__main__':
         script='train_poseVQ.py',
         gpu_min_mem=args.gpu_min_mem,
     )
+    
+    # Override hparams with command-line resume arguments
+    if args.resume_training:
+        hparams.EXP.RESUME_TRAINING = True
+        hparams.EXP.RESUME_PTH = args.resume_pth
+    
     main(hparams)

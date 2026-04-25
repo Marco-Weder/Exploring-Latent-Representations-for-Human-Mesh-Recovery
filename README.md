@@ -62,3 +62,28 @@ python train_poseVQ.py --cfg configs/tokenizer_amass_moyo.yaml
 ### Available tokenizer configs
 - `configs/tokenizer_amass_moyo.yaml`
 - `configs/tokenizer_amass_moyo_original.yaml`
+
+### Resuming interrupted training
+
+If your training was interrupted and you want to continue:
+
+**Option 1: Resume from latest checkpoint (continues current training)**
+```bash
+python train_poseVQ.py --cfg configs/tokenizer_amass_moyo.yaml --resume_training --resume_pth output/[experiment_name]/latest_checkpoint.pth
+```
+
+**Option 2: Resume from best checkpoint with extended training (recommended if you see overfitting)**
+If validation diverged after a certain point (e.g., best at iter 25k but training continued), resume from best checkpoint:
+```bash
+python train_poseVQ.py --cfg configs/tokenizer_amass_moyo.yaml --resume_training --resume_pth output/[experiment_name]/best_net.pth
+```
+
+**How resumption works:**
+- Full training state is saved at each validation to `latest_checkpoint.pth`
+- This includes: model weights, optimizer Adam state, LR scheduler state, and iteration counter
+- `best_net.pth` still stores only the best model weights for evaluation/inference
+- When resuming from `latest_checkpoint.pth`, the LR schedule continues smoothly from where it was paused
+
+**Finding your checkpoint paths:**
+- Latest: `output/tokenizer_amass_moyo_ID00_*/latest_checkpoint.pth`
+- Best: `output/tokenizer_amass_moyo_ID00_*/best_net.pth`

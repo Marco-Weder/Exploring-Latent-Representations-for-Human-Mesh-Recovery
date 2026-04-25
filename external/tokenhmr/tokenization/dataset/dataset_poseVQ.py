@@ -1,6 +1,7 @@
 import torch
 from torch.utils import data
 import numpy as np
+import os
 from os.path import join as pjoin
 import tqdm
 from smplx import SMPLH, SMPLX
@@ -85,7 +86,14 @@ class VQPoseDataset(data.Dataset):
         self.dataset_name = f'_{dt}'
 
         self.smpl_model = eval(f'{smpl_type.upper()}')(f'../data/body_models/{smpl_type}', num_betas=10, ext='pkl')
-        data = np.load(pjoin(self.data_root, f'{split}_{dt}.npz'))
+        data_file = pjoin(self.data_root, f'{split}_{dt}.npz')
+        if not os.path.isfile(data_file):
+            raise FileNotFoundError(
+                f"Missing tokenization dataset file: {data_file}. "
+                f"Expected structure: <DATA_ROOT>/{smpl_type}/{split}/{split}_{dt}.npz. "
+                f"Set DATA.DATA_ROOT in config to the folder that contains '{smpl_type}/'."
+            )
+        data = np.load(data_file)
         total_samples = data['pose_body'].shape[0]
         
         random_idx = None
@@ -162,7 +170,14 @@ class ValDataset(data.Dataset):
 
         for dt in dataset_list:
             self.dataset_name += f'_{dt}'
-            data = np.load(pjoin(self.data_root, f'{split}_{dt}.npz'))
+            data_file = pjoin(self.data_root, f'{split}_{dt}.npz')
+            if not os.path.isfile(data_file):
+                raise FileNotFoundError(
+                    f"Missing tokenization dataset file: {data_file}. "
+                    f"Expected structure: <DATA_ROOT>/{smpl_type}/{split}/{split}_{dt}.npz. "
+                    f"Set DATA.DATA_ROOT in config to the folder that contains '{smpl_type}/'."
+                )
+            data = np.load(data_file)
             raw_pose_body = np.append(raw_pose_body, data['pose_body'], axis=0)
             print(f"Loaded {dt} for {split} with {data['pose_body'].shape[0]} samples...")
 
