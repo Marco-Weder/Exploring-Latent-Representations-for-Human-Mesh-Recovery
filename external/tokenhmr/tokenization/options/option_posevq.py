@@ -58,6 +58,8 @@ hparams.ARCH.TOKEN_SIZE_MUL = 2
 hparams.ARCH.TOKEN_SIZE_DIV = 1
 hparams.ARCH.N_ENCODER_LAYERS = 3
 hparams.ARCH.N_DECODER_LAYERS = 2
+hparams.ARCH.N_HEADS = 8
+hparams.ARCH.DIM_HEAD = 64
 hparams.ARCH.NUM_TOKENS = -1  # -1 means 'use formula'; set >0 to force explicit token count
 hparams.ARCH.NB_JOINTS = 21
 hparams.ARCH.ROT_TYPE = 'rotmat'
@@ -65,8 +67,6 @@ hparams.ARCH.QUANTIZER = 'ema_reset' # ema, orig, ema_reset, reset
 hparams.ARCH.SMPL_TYPE = 'smplh'
 hparams.ARCH.CB_SCALE_DOWN = 2
 hparams.ARCH.BETA = 1.0
-hparams.ARCH.USE_DEFERRED = False
-hparams.ARCH.DEFERRED_ITER = 0
 
 hparams.EXP = CN()
 hparams.EXP.ID = ''

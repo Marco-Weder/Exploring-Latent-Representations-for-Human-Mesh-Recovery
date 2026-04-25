@@ -38,9 +38,6 @@ class TransformerTokenizer(nn.Module):
         self.rot_type = arch_params.ROT_TYPE
         self.input_joint_dim = input_joint_dim
         self.output_joint_dim = output_joint_dim
-        self.use_deferred = arch_params.USE_DEFERRED
-        self.deferred_iter = arch_params.DEFERRED_ITER
-        
         self.mesh_inference = mesh_inference
         self.add_noise = add_noise
         self.step_multiplier_mapping = step_multiplier_mapping()
@@ -49,20 +46,22 @@ class TransformerTokenizer(nn.Module):
             self.smplx_body_parts = get_smplx_body_parts()
 
         self.num_tokens = getattr(arch_params, 'NUM_TOKENS', 160)
+        self.n_heads = getattr(arch_params, 'N_HEADS', 8)
+        self.dim_head = getattr(arch_params, 'DIM_HEAD', 64)
 
         # 1. ENCODER (Self-Attention)
         self.encoder = TransformerEncoder(
-            num_tokens=self.num_joints,      
-            token_dim=self.input_joint_dim,  
-            dim=self.code_dim,               
-            depth=self.depth,                
-            heads=8,                         
-            mlp_dim=self.width               
+            num_tokens=self.num_joints,
+            token_dim=self.input_joint_dim,
+            dim=self.code_dim,
+            depth=self.depth,
+            heads=self.n_heads,
+            mlp_dim=self.width,
         )
 
-        # 2. UPDATED: DOWNSAMPLE (Cross-Attention)
-        self.latent_queries = nn.Parameter(torch.randn(1, self.num_tokens, self.code_dim))
-        self.cross_attn_down = CrossAttention(dim=self.code_dim, context_dim=self.code_dim, heads=8, dim_head=self.code_dim//8)
+        # 2. DOWNSAMPLE (Cross-Attention)
+        self.latent_queries = nn.Parameter(torch.randn(1, self.num_tokens, self.code_dim) * 0.02)
+        self.cross_attn_down = CrossAttention(dim=self.code_dim, context_dim=self.code_dim, heads=self.n_heads, dim_head=self.dim_head)
 
         # 3. QUANTIZER
         self.quantizer = QuantizeEMAReset(self.num_code, self.code_dim)
@@ -73,13 +72,13 @@ class TransformerTokenizer(nn.Module):
             token_dim=self.code_dim,
             dim=self.width,
             depth=self.depth,
-            heads=8,
-            mlp_dim=self.width
+            heads=self.n_heads,
+            mlp_dim=self.width,
         )
-        
-        # 5. UPDATED: UPSAMPLE (Cross-Attention)
-        self.joint_queries = nn.Parameter(torch.randn(1, self.num_joints, self.width))
-        self.cross_attn_up = CrossAttention(dim=self.width, context_dim=self.width, heads=8, dim_head=self.width//8)
+
+        # 5. UPSAMPLE (Cross-Attention)
+        self.joint_queries = nn.Parameter(torch.randn(1, self.num_joints, self.width) * 0.02)
+        self.cross_attn_up = CrossAttention(dim=self.width, context_dim=self.width, heads=self.n_heads, dim_head=self.dim_head)
         
         self.decoder_projection = nn.Linear(self.width, self.output_joint_dim)
 
@@ -97,8 +96,7 @@ class TransformerTokenizer(nn.Module):
         queries = self.latent_queries.expand(batch_size, -1, -1) 
         x_encoder = self.cross_attn_down(queries, context=x_encoder)
         
-        x_encoder = x_encoder.permute(0, 2, 1).contiguous()
-        x_encoder = self.quantizer.preprocess(x_encoder) 
+        x_encoder = x_encoder.contiguous().view(-1, self.code_dim)
         code_idx = self.quantizer.quantize(x_encoder)
         
         return code_idx.view(batch_size, -1)
@@ -136,8 +134,7 @@ class TransformerTokenizer(nn.Module):
             
             noise = torch.cuda.FloatTensor(1).uniform_() * noise_multiplier
             x = x.clone()
-            for s_idx in noised_samples:
-                x[s_idx, masked_joints] += noise
+            x[noised_samples[:, None], masked_joints] += noise
             
         # 1. Encode + Cross-Attention Downsample
         x_encoder = self.encoder(x)
@@ -147,25 +144,7 @@ class TransformerTokenizer(nn.Module):
         # 2. Quantize (Requires permute to channel-first)
         x_encoder_chan = x_encoder.permute(0, 2, 1) # (B, code_dim, 160)
 
-        # --- NEW: DEFERRED QUANTIZATION LOGIC ---
-        # We skip quantization if:
-        # 1. Training and global_step is within the deferred window
-        # 2. It's the warmup phase (global_step is None in your train script)
-        # 3. Validation is happening but we haven't reached the threshold yet
-        
-        is_deferred = self.use_deferred and (global_step is None or global_step < self.deferred_iter)
-        
-        if is_deferred:
-            # Bypass: Pass continuous vectors directly. 
-            # We set loss/ppl to 0.0 so they don't affect training metrics yet.
-            x_quantized = x_encoder_chan
-            loss = torch.tensor(0.0, device=x.device)
-            perplexity = torch.tensor(1.0, device=x.device)
-        else:
-            # Normal Operation: Snap to codebook.
-            # At iteration 20,000, self.quantizer(x) will trigger its internal 
-            # 'init_codebook' logic using the now-mature Transformer features.
-            x_quantized, loss, perplexity = self.quantizer(x_encoder_chan)
+        x_quantized, loss, perplexity = self.quantizer(x_encoder_chan)
 
         # 3. Decode + Cross-Attention Upsample
         x_quantized_seq = x_quantized.permute(0, 2, 1) 

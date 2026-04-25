@@ -1,7 +1,7 @@
 EXP:
-  NAME: 'tokenization_transformer_deferred_amass_moyo'
+  NAME: 'tokenization_transformer_amass_moyo'
   OUT_DIR: 'output'
-  DEBUG: FALSE # NEED TO CHANGE TO FALSE FOR FULL DATASET!
+  DEBUG: False # NEED TO CHANGE TO FALSE FOR FULL DATASET!
   PRINT_ITER: 100
   EVAL_ITER: 1000
   TR_DISP_ITER: 1000
@@ -12,7 +12,7 @@ EXP:
   RESUME_TRAINING: False
   LOG_TB: True
 DATA:
-  DATA_ROOT: 'tokenization_data'
+  DATA_ROOT: '/cluster/scratch/wederm/thesis_HMR/dataset_dir' # 'tokenization_data'
   DATASET: 'amass_pose'
   TRAINLIST: 'CMU_KIT_BMLrub_DanceDB_BMLmovi_EyesJapan_BMLhandball_TotalCapture_EKUT_ACCAD_TCDHands_MPI-Limits_MOYO'
   TRAIN_PART: '0.12_0.11_0.11_0.05_0.05_0.05_0.05_0.05_0.03_0.03_0.03_0.16_0.16'
@@ -21,9 +21,9 @@ DATA:
   ADD_NOISE: True
   BATCH_SIZE: 256
   MASK_BODY_PARTS: False
-  NUM_WORKERS: 10
+  NUM_WORKERS: 6
 OPT:
-  TOTAL_ITER: 150000
+  TOTAL_ITER: 200000
   WARM_UP_ITER: 2
   LR: 2e-4
   WEIGHT_DECAY: 0.00001
@@ -31,7 +31,7 @@ LOSS:
   POSE_LOSS_WT: 20.0
   JNT_LOSS_WT: 100.0
   MESH_LOSS_WT: 100.0
-  COMMIT_LOSS_WT: 5.0
+  COMMIT_LOSS_WT: 1.0
   LOSS_WT: 1.0
   POSE_LOSS: 'l2'
   MESH_LOSS: 'wt_l2'
@@ -52,5 +52,5 @@ ARCH:
   TOKEN_SIZE_MUL: 4
   TOKEN_SIZE_DIV: 4
   NUM_TOKENS: 160 # Now it supports any number of tokens, defaults to 160
-  USE_DEFERRED: True       # New: Enable Deferred Quantization
-  DEFERRED_ITER: 2000     # New: Number of iterations to wait before snapping to codebook
+  N_HEADS: 8
+  DIM_HEAD: 64
