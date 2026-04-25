@@ -67,7 +67,7 @@ hparams.ARCH.SMPL_TYPE = 'smplh'
 hparams.ARCH.CB_SCALE_DOWN = 2
 hparams.ARCH.BETA = 1.0
 hparams.ARCH.USE_DEFERRED = False
-hparams.ARCH.DEFERRED_ITER = 20000
+hparams.ARCH.DEFERRED_ITER = 0
 
 hparams.EXP = CN()
 hparams.EXP.ID = ''

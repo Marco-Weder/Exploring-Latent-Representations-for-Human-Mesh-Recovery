@@ -50,3 +50,15 @@ Once the environment is configured, verify the installation by running the demo 
 ```bash
 python run_tokenhmr_demo.py
 ```
+
+## Tokenizer Training
+Run tokenizer training from the tokenization directory.
+
+```bash
+cd external/tokenhmr/tokenization
+python train_poseVQ.py --cfg configs/tokenizer_amass_moyo.yaml
+```
+
+### Available tokenizer configs
+- `configs/tokenizer_amass_moyo.yaml`
+- `configs/tokenizer_amass_moyo_original.yaml`
