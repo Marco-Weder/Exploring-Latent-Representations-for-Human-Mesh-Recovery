@@ -1,3 +1,4 @@
+import math
 import torch
 import numpy as np
 import pytorch_lightning as pl
@@ -116,22 +117,46 @@ class TokenHMR(pl.LightningModule):
 
     def configure_optimizers(self) -> Tuple[torch.optim.Optimizer, torch.optim.Optimizer]:
         """
-        Setup model and distriminator Optimizers
+        Setup model and discriminator optimizers with linear warmup + cosine decay scheduler.
         Returns:
             Tuple[torch.optim.Optimizer, torch.optim.Optimizer]: Model and discriminator optimizers
         """
         param_groups = [{'params': filter(lambda p: p.requires_grad, self.get_parameters()), 'lr': self.cfg.TRAIN.LR}]
 
         optimizer = torch.optim.AdamW(params=param_groups,
-                                        # lr=self.cfg.TRAIN.LR,
                                         weight_decay=self.cfg.TRAIN.WEIGHT_DECAY)
+
+        warmup_steps = self.cfg.TRAIN.get('WARMUP_STEPS', 1000)
+        total_steps = self.cfg.GENERAL.TOTAL_STEPS
+        min_lr = self.cfg.TRAIN.get('MIN_LR', 1e-8)
+        peak_lr = self.cfg.TRAIN.LR
+
+        def lr_lambda(step: int) -> float:
+            if step < warmup_steps:
+                return step / max(1, warmup_steps)
+            progress = (step - warmup_steps) / max(1, total_steps - warmup_steps)
+            cosine_decay = 0.5 * (1.0 + math.cos(math.pi * progress))
+            return max(min_lr / peak_lr, cosine_decay)
+
+        # Suppress false "step before optimizer.step" warning from LambdaLR.__init__
+        optimizer._step_count = 1
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+        optimizer._step_count = 0
+        self.lr_scheduler = scheduler
+
         if self.cfg.LOSS_WEIGHTS.ADVERSARIAL > 0:
             optimizer_disc = torch.optim.AdamW(params=self.discriminator.parameters(),
                                                 lr=self.cfg.TRAIN.LR,
                                                 weight_decay=self.cfg.TRAIN.WEIGHT_DECAY)
-
             return optimizer, optimizer_disc
         return optimizer
+
+    def on_save_checkpoint(self, checkpoint: Dict) -> None:
+        checkpoint['lr_scheduler'] = self.lr_scheduler.state_dict()
+
+    def on_load_checkpoint(self, checkpoint: Dict) -> None:
+        if 'lr_scheduler' in checkpoint:
+            self.lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
 
     def forward_step(self, batch: Dict, train: bool = False) -> Dict:
         """
@@ -390,6 +415,11 @@ class TokenHMR(pl.LightningModule):
             gn = torch.nn.utils.clip_grad_norm_(self.get_parameters(), self.cfg.TRAIN.GRAD_CLIP_VAL, error_if_nonfinite=True)
             self.log('train/grad_norm', gn, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         optimizer.step()
+        self.lr_scheduler.step()
+
+        if self.global_step % 6 == 0:
+            self.log('train/lr', self.lr_scheduler.get_last_lr()[0], on_step=True, prog_bar=True, logger=False)
+
         if self.cfg.LOSS_WEIGHTS.ADVERSARIAL > 0:
             loss_disc = self.training_step_discriminator(mocap_batch, pred_smpl_params['body_pose'].reshape(batch_size, -1), pred_smpl_params['betas'].reshape(batch_size, -1), optimizer_disc)
             output['losses']['loss_gen'] = loss_adv
@@ -414,7 +444,6 @@ class TokenHMR(pl.LightningModule):
         self.validation_step_outputs.append(loss)
 
         if self.global_step > 0 and batch_idx % self.cfg.GENERAL.LOG_STEPS == 0:
-            # CHANGED to wandb_logging
             self.wandb_logging(batch, output, self.global_step, train=False)
 
         output['loss'] = loss

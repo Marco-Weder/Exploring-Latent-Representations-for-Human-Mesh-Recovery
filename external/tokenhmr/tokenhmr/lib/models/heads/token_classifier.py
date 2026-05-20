@@ -8,6 +8,7 @@ import sys, os
 sys.path.append(os.path.join(__file__.replace(os.path.basename(__file__), ''), '..', '..', '..', '..'))
 
 from tokenization.models.vanilla_pose_vqvae import DecodeTokens as VanillaDecodeTokens
+from tokenization.models.transformer_pose_vqvae import TransformerDecodeTokens
 
 class Proxy(object):
     def __init__(self, tokenizer):

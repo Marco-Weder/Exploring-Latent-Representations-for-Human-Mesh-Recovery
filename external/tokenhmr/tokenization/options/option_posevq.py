@@ -32,8 +32,12 @@ hparams.OPT = CN()
 hparams.OPT.TOTAL_ITER = 200000
 hparams.OPT.WARM_UP_ITER = 2
 hparams.OPT.LR = 2e-4
-hparams.OPT.MIN_LR = 1e-6
 hparams.OPT.WEIGHT_DECAY = 0.0
+# Main scheduler kind after warmup: 'multistep' (uses LR_SCHEDULER + GAMMA) or 'cosine' (uses MIN_LR).
+hparams.OPT.SCHEDULER = 'multistep'
+hparams.OPT.LR_SCHEDULER = '75000:100000'
+hparams.OPT.GAMMA = 0.05
+hparams.OPT.MIN_LR = 1e-6
 
 hparams.LOSS = CN()
 hparams.LOSS.POSE_LOSS_WT = 1.0
@@ -61,12 +65,23 @@ hparams.ARCH.N_DECODER_LAYERS = 2
 hparams.ARCH.NUM_TOKENS = -1  # -1 means 'use formula'; set >0 to force explicit token count
 hparams.ARCH.NB_JOINTS = 21
 hparams.ARCH.ROT_TYPE = 'rotmat'
-hparams.ARCH.QUANTIZER = 'ema_reset' # ema, orig, ema_reset, reset
+hparams.ARCH.QUANTIZER = 'ema_reset' # ema, orig, ema_reset, reset, fsq
+hparams.ARCH.DIST_METRIC = 'l2'  # 'l2' or 'cosine' (ignored for fsq)
+# FSQ levels per channel; only read when QUANTIZER == 'fsq'. Default [8,8,6,5] is the
+# paper's recommended set for ~2^11 ≈ 2048 codes (Mentzer et al. 2023, App.); d = len(levels).
+hparams.ARCH.FSQ_LEVELS = [8, 8, 6, 5]
 hparams.ARCH.SMPL_TYPE = 'smplh'
 hparams.ARCH.CB_SCALE_DOWN = 2
 hparams.ARCH.BETA = 1.0
-hparams.ARCH.USE_DEFERRED = False
-hparams.ARCH.DEFERRED_ITER = 0
+hparams.ARCH.DROPOUT = 0.0
+hparams.ARCH.USE_KINEMATIC_PE = False
+hparams.ARCH.EMB_DROPOUT = 0.0
+hparams.ARCH.EMB_DROPOUT_TYPE = 'drop'
+hparams.ARCH.CROSS_ATTN_DROPOUT = 0.0
+# Tier-1 capacity knobs. Defaults reproduce the previous architecture exactly.
+hparams.ARCH.FFN_MULT = 1            # 4 = standard transformer FFN expansion
+hparams.ARCH.N_DOWN_BLOCKS = 1       # >=2 → stacked Perceiver-style cross-attn down
+hparams.ARCH.N_UP_BLOCKS = 1         # >=2 → stacked cross-attn up
 
 hparams.EXP = CN()
 hparams.EXP.ID = ''
@@ -83,6 +98,7 @@ hparams.EXP.EVAL_ONLY = False
 hparams.EXP.EVAL_DS = 'test'
 hparams.EXP.RESUME_PTH = ''
 hparams.EXP.RESUME_TRAINING = False
+hparams.EXP.WARM_RESTART = False
 hparams.EXP.LOG_TB = False
 
 def get_hparams_defaults():

@@ -4,13 +4,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class QuantizeEMAReset(nn.Module):
-    def __init__(self, nb_code, code_dim):
+    def __init__(self, nb_code, code_dim, dist_metric='l2'):
         super().__init__()
+        assert dist_metric in ('l2', 'cosine'), f"dist_metric must be 'l2' or 'cosine', got {dist_metric!r}"
         self.nb_code = nb_code
         self.code_dim = code_dim
         self.mu = 0.99
+        self.dist_metric = dist_metric
         self.reset_codebook()
-        
+
     def reset_codebook(self):
         self.init = False
         self.code_sum = None
@@ -31,24 +33,26 @@ class QuantizeEMAReset(nn.Module):
     def init_codebook(self, x):
         out = self._tile(x)
         self.codebook = out[:self.nb_code]
+        if self.dist_metric == 'cosine':
+            self.codebook = F.normalize(self.codebook, dim=-1)
         self.code_sum = self.codebook.clone()
         self.code_count = torch.ones(self.nb_code, device=self.codebook.device)
         self.init = True
-        
+
     @torch.no_grad()
-    def compute_perplexity(self, code_idx) : 
+    def compute_perplexity(self, code_idx) :
         # Calculate new centres
         code_onehot = torch.zeros(self.nb_code, code_idx.shape[0], device=code_idx.device)  # nb_code, N * L
         code_onehot.scatter_(0, code_idx.view(1, code_idx.shape[0]), 1)
 
         code_count = code_onehot.sum(dim=-1)  # nb_code
-        prob = code_count / torch.sum(code_count)  
+        prob = code_count / torch.sum(code_count)
         perplexity = torch.exp(-torch.sum(prob * torch.log(prob + 1e-7)))
         return perplexity
-    
+
     @torch.no_grad()
     def update_codebook(self, x, code_idx):
-        
+
         code_onehot = torch.zeros(self.nb_code, x.shape[0], device=x.device)  # nb_code, N * L
         code_onehot.scatter_(0, code_idx.view(1, x.shape[0]), 1)
 
@@ -57,6 +61,8 @@ class QuantizeEMAReset(nn.Module):
 
         out = self._tile(x)
         code_rand = out[:self.nb_code]
+        if self.dist_metric == 'cosine':
+            code_rand = F.normalize(code_rand, dim=-1)
 
         # Update centres
         self.code_sum = self.mu * self.code_sum + (1. - self.mu) * code_sum  # w, nb_code
@@ -66,18 +72,24 @@ class QuantizeEMAReset(nn.Module):
         code_update = self.code_sum.view(self.nb_code, self.code_dim) / self.code_count.view(self.nb_code, 1)
 
         self.codebook = usage * code_update + ~(usage) * code_rand
-        prob = code_count / torch.sum(code_count)  
+        if self.dist_metric == 'cosine':
+            self.codebook = F.normalize(self.codebook, dim=-1)
+        prob = code_count / torch.sum(code_count)
         perplexity = torch.exp(-torch.sum(prob * torch.log(prob + 1e-7)))
-            
+
         return perplexity
 
     def preprocess(self, x):
         # NCT -> NTC -> [NT, C]
         x = x.permute(0, 2, 1).contiguous()
-        x = x.view(-1, x.shape[-1])  
+        x = x.view(-1, x.shape[-1])
         return x
 
     def quantize(self, x):
+        if self.dist_metric == 'cosine':
+            # x and codebook are unit-norm here, so argmin ||x-e||^2 == argmax x·e.
+            code_idx = torch.argmax(torch.matmul(x, self.codebook.t()), dim=-1)
+            return code_idx
         # Calculate latent code x_l
         k_w = self.codebook.t()
         distance = torch.sum(x ** 2, dim=-1, keepdim=True) - 2 * torch.matmul(x, k_w) + torch.sum(k_w ** 2, dim=0,
@@ -102,6 +114,9 @@ class QuantizeEMAReset(nn.Module):
         # Preprocess
         if input_3d: # For motion sequence
             x = self.preprocess(x)
+
+        if self.dist_metric == 'cosine':
+            x = F.normalize(x, dim=-1)
 
         # Init codebook if not inited
         if self.training and not self.init:

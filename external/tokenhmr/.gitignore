@@ -1,4 +1,5 @@
 # Specific
+/backup/
 /logs*/
 /results/
 /sandbox/

@@ -8,7 +8,29 @@ import pickle as pkl
 import wandb
 
 from utils.pose_visualize import visualize_from_mesh
+from utils.rotation_conversions import axis_angle_to_matrix
 from torch.utils.tensorboard import SummaryWriter
+
+
+def gt_from_batch(batch, body_model):
+    """Returns (gt_pose, gt_mesh, gt_jnts) on CUDA, fp32.
+
+    Two paths depending on whether the dataset cached SMPL outputs:
+    - cached: the batch already carries `gt_pose_body`, `body_vertices`, `body_joints`.
+    - on-the-fly: the batch carries only `pose_body_aa`; SMPL is run on `body_model`
+      (an SMPLHLayer / SMPLXLayer on cuda) once per call. Numerically matches the
+      cached path to within ~1e-7 (sub-ULP for fp32 MSE losses).
+    """
+    if 'body_vertices' in batch:
+        return (
+            batch['gt_pose_body'].cuda().float(),
+            batch['body_vertices'].cuda().float(),
+            batch['body_joints'].cuda().float(),
+        )
+    pose_aa = batch['pose_body_aa'].cuda(non_blocking=True).float()
+    gt_pose = axis_angle_to_matrix(pose_aa.view(-1, 21, 3))
+    out = body_model(body_pose=gt_pose)
+    return gt_pose, out.vertices, out.joints
 
 def reset_err_list(type='tr'):
     err_list = {f'{type}/curr_pose_recons': 0.,
@@ -55,10 +77,10 @@ def calculate_jnts_reconstruction_error(gt_jnts, pred_jnts):
     valid_joints = [*range(1,22)] # only body joints
     return torch.sqrt(torch.pow(gt_jnts[:,valid_joints]-pred_jnts[:,valid_joints], 2).sum(-1)).mean()
 
-def save_results_func(batch, output, results):
+def save_results_func(batch, output, results, gt_jnts):
     valid_joints = [*range(1,22)]
     save_aa_gt = batch['pose_body_aa'].numpy()
-    save_jnts_gt = batch['body_joints'][:,valid_joints].numpy()
+    save_jnts_gt = gt_jnts[:, valid_joints].detach().cpu().numpy()
     save_aa_pred = output['pred_pose_body_aa'].detach().cpu().numpy()
     save_jnts_pred = output['pred_body_joints'][:,valid_joints].detach().cpu().numpy()
     results['gt_jnts'].extend(save_jnts_gt)
@@ -80,11 +102,14 @@ def eval_pose_vqvae(hparams, val_loader, net, logger, writer, nb_iter, out_dir, 
     err_list = reset_err_list('val')
     dataset_name = ''
 
+    if hparams.ARCH.MODEL_NAME in ('vanilla', 'vanilla-v1'):
+        from models.vanilla_pose_vqvae import body_model
+    else:
+        from models.transformer_pose_vqvae import body_model
+
     with torch.no_grad():
         for batch_idx, batch in enumerate(tqdm.tqdm(val_loader)):
-            gt_pose = batch['gt_pose_body'].cuda().float() # (bs, 63)
-            gt_mesh = batch['body_vertices'].cuda().float() # (bs, 10743)
-            gt_jnts = batch['body_joints'].cuda().float()
+            gt_pose, gt_mesh, gt_jnts = gt_from_batch(batch, body_model)
             dataset_name = batch['dataset_name'][0]
 
             output, loss_commit, perplexity = net(gt_pose)
@@ -93,7 +118,7 @@ def eval_pose_vqvae(hparams, val_loader, net, logger, writer, nb_iter, out_dir, 
             jnt_error = calculate_jnts_reconstruction_error(gt_jnts, output['pred_body_joints'])
 
             if save_results:
-                results = save_results_func(batch, output, results)
+                results = save_results_func(batch, output, results, gt_jnts)
 
             err_list['val/curr_pose_recons'] += pose_error.item()
             err_list['val/curr_mesh_recons'] += mesh_error.item()

@@ -1,0 +1,48 @@
+AIC-TRAIN-WMASK:
+  TYPE: ImageDataset
+  URLS: dataset_tars/aic-train-vitpose/{000000..000104}.tar
+  epoch_size: 200000
+AVA-TRAIN-MIDFRAMES-1FPS-WMASK:
+  TYPE: ImageDataset
+  URLS: dataset_tars/ava-train-midframes-1fps-vitpose/{000000..000092}.tar
+  epoch_size: 200000
+BEDLAM:
+  TYPE: BedlamDataset
+  URLS: dataset_tars/bedlam/
+  epoch_size: 4000000
+CMU-MOCAP:
+  DATASET_FILE: cmu_mocap.npz
+COCO-TRAIN-2014-VITPOSE-REPLICATE-PRUNED12:
+  TYPE: ImageDataset
+  URLS: dataset_tars/coco-train-2014-vitpose-pruned/{000000..000044}.tar
+  epoch_size: 45000
+COCO-TRAIN-2014-WMASK-PRUNED:
+  TYPE: ImageDataset
+  URLS: dataset_tars/coco-train-2014-pruned/{000000..000017}.tar
+  epoch_size: 18000
+COCO-VAL:
+  KEYPOINT_LIST:
+  - 0
+  TYPE: ImageDataset
+  URLS: dataset_tars/coco-val/{000000..000000}.tar
+H36M-TRAIN-WMASK:
+  TYPE: ImageDataset
+  URLS: dataset_tars/h36m-train/{000000..000312}.tar
+  epoch_size: 314000
+INSTA-TRAIN-WMASK:
+  TYPE: ImageDataset
+  URLS: dataset_tars/insta-train-vitpose-replicate/{000000..003657}.tar
+  epoch_size: 4000000
+LSP-EXTENDED:
+  KEYPOINT_LIST:
+  - 0
+  TYPE: ImageDataset
+  URLS: dataset_tars/hr-lspet/{000000..000000}.tar
+MPI-INF-TRAIN-PRUNED:
+  TYPE: ImageDataset
+  URLS: dataset_tars/mpi-inf-train-pruned/{000000..00006}.tar
+  epoch_size: 12000
+MPII-TRAIN-WMASK:
+  TYPE: ImageDataset
+  URLS: dataset_tars/mpii-train/{000000..000009}.tar
+  epoch_size: 100000

@@ -73,11 +73,11 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
 
     # Setup checkpoint saving
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
-        dirpath=os.path.join(cfg.paths.output_dir, 'checkpoints'), 
-        every_n_train_steps=cfg.GENERAL.CHECKPOINT_STEPS, 
+        dirpath=os.path.join(cfg.paths.output_dir, 'checkpoints'),
+        every_n_train_steps=cfg.GENERAL.CHECKPOINT_STEPS,
         save_last=True,
         save_top_k=cfg.GENERAL.CHECKPOINT_SAVE_TOP_K,
-        save_weights_only=True,
+        save_weights_only=False,
     )
     # rich_callback = pl.callbacks.RichProgressBar()
     tqdm_callback = TQDMProgressBar(refresh_rate=10) 
