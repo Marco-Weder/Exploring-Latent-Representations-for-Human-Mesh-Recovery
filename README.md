@@ -8,7 +8,7 @@ This repository contains the code for my Bachelor's thesis at ETH Zurich. The pr
 This project uses **Git submodules**. Ensure you clone the repository and its dependencies recursively:
 
 ```bash
-git clone --recurse-submodules [https://github.com/Marco-Weder/Exploring-Latent-Representations-for-Human-Mesh-Recovery.git](https://github.com/Marco-Weder/Exploring-Latent-Representations-for-Human-Mesh-Recovery.git)
+git clone --recurse-submodules https://github.com/Marco-Weder/Exploring-Latent-Representations-for-Human-Mesh-Recovery.git
 cd Exploring-Latent-Representations-for-Human-Mesh-Recovery
 ```
 

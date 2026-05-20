@@ -115,6 +115,8 @@ class TransformerTokenizer(nn.Module):
             self.smplx_body_parts = get_smplx_body_parts()
 
         self.num_tokens = getattr(arch_params, 'NUM_TOKENS', 160)
+        self.n_heads = getattr(arch_params, 'N_HEADS', 8)
+        self.dim_head = getattr(arch_params, 'DIM_HEAD', 64)
 
         # FSQ uses small code_dim = len(levels) (typ. 3-7) and can't satisfy the %8 rule;
         # heads always operate on `width` because the decoder embeds token_dim -> width
