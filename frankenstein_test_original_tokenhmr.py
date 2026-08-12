@@ -99,8 +99,16 @@ def run_frankenstein_test(ckpt_path, neutral_pose_6d, token_idx_to_change, targe
 
 if __name__ == '__main__':
     # 1. Setup your paths and parameters
-    ckpt_path = '/home/marco/thesis-HMR/external/tokenhmr/data/checkpoints/tokenizer.pth'
-    
+    import argparse
+    from pathlib import Path
+
+    _default_ckpt = (Path(__file__).resolve().parent
+                     / 'external/tokenhmr/data/checkpoints/tokenizer.pth')
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--ckpt', type=Path, default=_default_ckpt,
+                        help='tokenizer checkpoint (default: %(default)s)')
+    ckpt_path = str(parser.parse_args().ckpt)
+
     # FIX: Input shape must be (Batch, Num_Joints, 6D_Features)
     neutral_pose_6d = torch.zeros(1, 21, 6) 
     
