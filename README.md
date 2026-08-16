@@ -1,12 +1,77 @@
 # Exploring Latent Representations for Human Mesh Recovery
 
-Code for my bachelor's thesis at ETH Zurich. The thesis studies the **pose tokenizer** as
-the interface between pose reconstruction and image-based prediction: how a discrete pose
-representation should be built, and how an image model should be trained to predict its
-tokens. It builds on [TokenHMR](https://tokenhmr.is.tue.mpg.de).
+Bachelor's thesis, ETH Zurich. Human mesh recovery estimates the 3D pose and shape of a
+person from a single image. A recent line of work represents the pose *discretely*, as a
+sequence of tokens drawn from a learned codebook, which turns pose estimation from
+regression into classification.
 
-To reproduce a specific figure, table or number from the thesis, see
-**[docs/REPRODUCE.md](docs/REPRODUCE.md)**.
+This work studies the **pose tokenizer** as the interface between two stages that are
+normally built apart: the tokenizer is selected by how faithfully it reconstructs a pose,
+a criterion that never involves the image model that must later predict its codes. Eight
+tokenizers are compared on two properties reconstruction error cannot express, and the
+downstream model is retrained across the range from pose-space supervision to pure
+classification.
+
+Built on [TokenHMR](https://tokenhmr.is.tue.mpg.de).
+
+<!-- ---------------------------------------------------------------------------
+     VIDEO COMPARISON -- placeholder.
+
+     Produce it with:
+         thesis compare-video
+     which writes docs/media/gymnasts_ours_vs_upstream.gif (target: under 4 MB)
+     and results/compare/gymnasts_ours_vs_upstream.mp4.
+
+     Then delete the placeholder block below and uncomment this line:
+     ![Our token classifier against the released TokenHMR model](docs/media/gymnasts_ours_vs_upstream.gif)
+     --------------------------------------------------------------------------- -->
+
+> **[ Video comparison goes here ]**
+>
+> Side by side on `demo_sample/video/gymnasts.mp4`: this thesis's token classifier
+> (`chain_st`) on the left, the released TokenHMR model on the right. Person detection and
+> tracking run once and both models receive the identical boxes and frames, so the only
+> difference between the two panels is the pose model.
+
+---
+
+## What the thesis finds
+
+Reconstruction fidelity is a poor guide to how a tokenizer behaves downstream. Two
+measures of the discrete code capture what it misses:
+
+- **Label stability** `S(δ)` — the fraction of token indices that survive a small
+  perturbation of the pose.
+- **Codebook redundancy** `Δ_NN` — how far the decoded body moves when a code is replaced
+  by its nearest neighbour.
+
+Both are computed on the frozen tokenizer, so a tokenizer can be judged as a *prediction
+target* before any image model is trained.
+
+Running one identical classification setup across four tokenizers:
+
+| Tokenizer | Recon. MPJPE | Stability `S(1°)` | Token top-1 | EMDB PA-MPJPE |
+| --- | ---: | ---: | ---: | ---: |
+| Transformer-FSQ-d4 | 2.58 mm | **63 %** | 24 % | **54.4 mm** |
+| Transformer-VQ-L2-d256 | 2.45 mm | 53 % | **26 %** | 70.0 mm |
+| CNN-VQ-L2-d256 | 2.27 mm | 24 % | 4 % | 72.8 mm |
+| Transformer-VQ-Cosine-d4 | **1.51 mm** | 22 % | 5 % | 63.7 mm |
+
+The ordering follows stability and inverts reconstruction: the best reconstructor of the
+four is the second-worst classifier. Selecting by reconstruction error, the conventional
+criterion, picks it.
+
+Two further results:
+
+- A model trained the way TokenHMR trains it **does not learn a discrete code**. Its
+  predicted distribution stays diffuse, and decoding it as a token rather than as a
+  softmax mixture costs more than 140 mm. Any method claiming to predict pose tokens
+  should report its arg-max-decoded error.
+- Token accuracy is a weak proxy for pose quality. Over 57,239 wrong predictions, 99 % move
+  the body by less than 10 mm, so models a percentage point apart on top-1 differ by more
+  than 40 mm of MPJPE.
+
+The full write-up is in the thesis PDF.
 
 ## What is mine and what is upstream
 
@@ -23,9 +88,8 @@ So the complete set of changes made for this thesis is exactly:
 git -C external/tokenhmr diff main..thesis
 ```
 
-`external/PHALP`, `external/MoRo` and `external/VQ-HPS` are **not** vendored here. PHALP is
-installed with pip (below). MoRo and VQ-HPS were read as references while implementing the
-Gumbel decode and the classification setting, but no code from either is imported.
+MoRo and VQ-HPS were read as references while implementing the Gumbel decode and the
+classification setting, but no code from either is imported.
 
 ## Setup
 
@@ -33,141 +97,125 @@ Gumbel decode and the classification setting, but no code from either is importe
 
 ```bash
 git clone --recurse-submodules https://github.com/Marco-Weder/Exploring-Latent-Representations-for-Human-Mesh-Recovery.git
-cd Exploring-Latent-Representations-for-Human-Mesh-Recovery
+cd Exploring-Latent-Representations-for-Human-Mesh-Recovery/external/tokenhmr
 ```
 
-If you already cloned without `--recurse-submodules`:
-
-```bash
-git submodule update --init --recursive
-```
+If you cloned without `--recurse-submodules`: `git submodule update --init --recursive`.
 
 ### 2. Environment
 
-Python 3.10, for compatibility with legacy mesh-processing libraries (chumpy) on modern
-hardware.
+Python 3.10, because SMPL depends on chumpy, which does not build on newer versions.
 
 ```bash
-conda create -n thesis-HMR python=3.10 -y
+conda env create -f env/environment.yml
 conda activate thesis-HMR
 
-# Build-critical dependencies first; this avoids the "No module named pip"
-# error while chumpy builds.
-pip install "numpy<1.24.0" setuptools wheel
-pip install chumpy==0.70 --no-build-isolation
+# chumpy and detectron2 build from source and need older build tools than they
+# would otherwise pick up, which is what env/constraints.txt pins.
+pip install -c env/constraints.txt "numpy<1.24" setuptools wheel
+pip install -c env/constraints.txt --no-build-isolation chumpy==0.70
 
-pip install -r requirements.txt
-
-# detectron2 (set CUDA_HOME to the CUDA version your PyTorch was built against)
-export CUDA_HOME=/usr/local/cuda-12.8
-export PATH=$CUDA_HOME/bin:$PATH
-export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
-pip install --no-build-isolation git+https://github.com/facebookresearch/detectron2
-
-# PHALP, needed only for the video/tracking demo
-pip install git+https://github.com/brjathu/PHALP
+pip install -r env/requirements.txt
+pip install -e .
 ```
 
-`stable_thesis_requirements.txt` is a frozen snapshot of the environment the reported
-results were produced in, should `requirements.txt` drift.
+Optional, and only for the demos: detectron2 for person detection, and Blender's `bpy`
+for three of the figures. `env/system-requirements.md` covers those, plus CUDA, EGL and
+the exact versions the reported numbers were produced with.
 
-### 3. Data and body models
-
-Downloading requires registering at <https://tokenhmr.is.tue.mpg.de> and accepting the
-licences. This fetches SMPL and SMPL-H body models and the TokenHMR / tokenization
-checkpoints:
+### 3. Check it worked
 
 ```bash
-cd external/tokenhmr
-bash ./fetch_demo_data.sh
+thesis doctor     # interpreter, packages, GPU, external tools, data, provenance
+thesis paths      # every path the project resolves, and whether it exists
 ```
 
-The video demo also needs the neutral SMPL model in PHALP's cache:
+### 4. Data
+
+The body models and checkpoints require registering at
+<https://tokenhmr.is.tue.mpg.de> and accepting the licences.
 
 ```bash
-mkdir -p ~/.cache/phalp/3D/models/smpl/
-cp external/tokenhmr/data/body_models/smpl/SMPL_NEUTRAL.pkl ~/.cache/phalp/3D/models/smpl/
+bash fetch_demo_data.sh
+thesis manifest link-tokenizers    # stable names for the stage-1 checkpoints
 ```
 
-Tokenizer training additionally needs AMASS and MOYO, and downstream training needs the
-image datasets. Both are described in the upstream TokenHMR README
-(`external/tokenhmr/README.md`).
+How much you need depends on what you want to do: about 6 GB for a demo, 34 GB to
+re-render figures from cached results, and 825 GB to retrain or re-evaluate the image
+model. `env/system-requirements.md` has the breakdown.
 
-## Demos
+## Reproducing a result
+
+Everything runs from any working directory. Three examples:
 
 ```bash
-python run_tokenhmr_demo.py     # single images
-python run_tokenhmr_track.py    # video, via PHALP
+# A table cell: re-evaluate a finished run from its own saved config.
+python tokenhmr/eval.py \
+    --checkpoint logs/tokenhmr_chain2_st/runs/chain_st/checkpoints/last.ckpt \
+    --model_config logs/tokenhmr_chain2_st/runs/chain_st/model_config.yaml \
+    --dataset EMDB --decode_mode hard --exp_name my_check
+# -> 52.28 mm EMDB PA-MPJPE, the value the thesis prints
+
+# A figure.
+thesis figure recon-frontier
+
+# The video comparison at the top of this page.
+thesis compare-video
 ```
 
-## Stage 1: training a pose tokenizer
+`docs/REPRODUCE.md` maps every table and figure in the thesis to the command that
+produces it. Appendix A.4 of the thesis carries the same map.
+
+### Provenance
+
+Which checkpoint produced which number is recorded in `manifest/`, built from evaluation
+outputs already on disk:
 
 ```bash
-cd external/tokenhmr/tokenization
-python train_poseVQ.py --cfg configs/tokenizer_amass_moyo_fsq.yaml
+thesis manifest check        # every published value against every measurement
+thesis manifest tokenizers   # the eight stage-1 tokenizers
+thesis golden check          # the deterministic analyses, value by value
 ```
 
-`tokenizer_amass_moyo_fsq.yaml` is the tokenizer carried through the thesis: a transformer
-encoder-decoder with an FSQ quantizer, 160 latent tokens, levels `[8,8,6,5]` (1920 codes,
-`d = 4`). The eight tokenizers compared in the ablation are:
+Figure scripts read their numbers from the manifest and compare them against the values
+printed in the thesis, so a regenerated figure either matches what was published or
+reports the discrepancy. `docs/MANIFEST.md` explains the design.
 
-| Config | Quantizer | `d` | `K` |
-| --- | --- | --- | --- |
-| `tokenizer_amass_moyo_original.yaml` | EMA (ℓ2), convolutional | 256 | 2048 |
-| `tokenizer_amass_moyo_transformer.yaml` | EMA (cosine) | 256 | 2048 |
-| `tokenizer_amass_moyo_transformer_masked.yaml` | EMA (cosine), skeleton-masked | 256 | 2048 |
-| `tokenizer_amass_moyo_transformer_dim4.yaml` | EMA (cosine) | 4 | 2048 |
-| `tokenizer_amass_moyo_transformer_dim2.yaml` | EMA (cosine) | 2 | 2048 |
-| `tokenizer_amass_moyo_fsq.yaml` | FSQ `[8,8,6,5]` | 4 | 1920 |
-| `tokenizer_amass_moyo_fsq_16k.yaml` | FSQ `[8,8,8,6,5]` | 5 | 15360 |
+## Layout
 
-The ℓ2 transformer row of the ablation is this same transformer config with
-`DIST_METRIC: 'l2'`.
+```
+docs/                      reproduction guide, provenance notes, media
+external/tokenhmr/         the fork; all code lives here
+  repro/                   path resolution, provenance, the `thesis` command
+  manifest/                run -> checkpoint -> number, version controlled
+  env/                     environment and system requirements
+  tools/                   training queues, data preparation
+  tokenization/            stage 1: the pose tokenizer, and its analyses
+  tokenhmr/                stage 2: the image model, training and evaluation
+  thesis_figures/          figure scripts, split by whether they need a GPU
+```
 
-### Resuming an interrupted run
+`external/tokenhmr/docs/LAYOUT.md` describes it in full.
 
-Full training state (weights, optimiser, LR scheduler, iteration counter) is written to
-`latest_checkpoint.pth` at every validation, so the schedule continues smoothly:
+## Training
 
 ```bash
-python train_poseVQ.py --cfg configs/tokenizer_amass_moyo_fsq.yaml \
-    --resume_training --resume_pth output/<experiment_name>/latest_checkpoint.pth
+# Stage 1: the pose tokenizer, on AMASS and MOYO.
+python -m tokenization.train_poseVQ --cfg tokenization/configs/tokenizer_amass_moyo_fsq.yaml
+
+# Stage 2: the image model. Experiment configs live in lib/configs_hydra/experiment/.
+python -m tokenhmr.train experiment=tokenhmr_additive
 ```
 
-`best_net.pth` holds only the best weights, for evaluation and inference. Resuming from it
-instead restarts the schedule, which is what you want if validation diverged partway.
-
-## Stage 2: training the downstream model
-
-```bash
-cd external/tokenhmr
-python tokenhmr/train.py experiment=tokenhmr_additive
-```
-
-Experiment configs are Hydra configs under
-`tokenhmr/lib/configs_hydra/experiment/`. Each names the tokenizer checkpoint it freezes as
-its pose head, via `TOKENIZER_CHECKPOINT_PATH`; point that at your own stage-1 output.
-
-## Repository layout
-
-```
-.
-├── docs/REPRODUCE.md                  how to reproduce each thesis result
-├── run_tokenhmr_demo.py               image demo wrapper
-├── run_tokenhmr_track.py              video demo wrapper (PHALP)
-├── requirements.txt                   environment
-├── stable_thesis_requirements.txt     frozen snapshot of the reported environment
-└── external/tokenhmr/                 submodule: Marco-Weder/TokenHMR, branch `thesis`
-    ├── tokenization/                  stage 1: pose tokenizer + latent-space analysis
-    ├── tokenhmr/                      stage 2: downstream model + token analysis
-    └── thesis_figures/                scripts producing the thesis figures
-```
+The queues in `tools/queues/` run the multi-arm studies end to end, each arm followed by
+evaluation in both decoding modes. They are resumable: an arm whose run directory already
+holds a checkpoint is skipped.
 
 ## Acknowledgements
 
-Built on [TokenHMR](https://github.com/saidwivedi/TokenHMR) (Dwivedi et al., CVPR 2024) and
-[HMR2.0](https://github.com/shubham-goel/4D-Humans) (Goel et al., ICCV 2023). The
-classification setting takes its idea from
-[VQ-HPS](https://github.com/g-fiche/VQ-HPS) (Fiche et al., ECCV 2024) and GenHMR
-(Saleem et al., AAAI 2025); the finite scalar quantizer is from
-[FSQ](https://arxiv.org/abs/2309.15505) (Mentzer et al., ICLR 2024).
+This work builds on [TokenHMR](https://tokenhmr.is.tue.mpg.de) and
+[HMR2.0](https://shubham-goel.github.io/4dhumans/), and takes the classification idea from
+[VQ-HPS](https://g-fiche.github.io/research-pages/vqhps/) and
+[GenHMR](https://m-usamasaleem.github.io/publication/GenHMR/GenHMR.html). The finite scalar
+quantizer is from [FSQ](https://arxiv.org/abs/2309.15505). SMPL, AMASS, MOYO, BEDLAM, 3DPW
+and EMDB each carry their own licence, held by their respective owners.
