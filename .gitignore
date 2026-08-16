@@ -114,3 +114,7 @@ Miniconda3-latest-Linux-x86_64.sh
 .coverage
 .DS_Store
 *.lock
+
+# Python
+__pycache__/
+*.py[cod]
