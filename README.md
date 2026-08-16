@@ -14,24 +14,13 @@ classification.
 
 Built on [TokenHMR](https://tokenhmr.is.tue.mpg.de).
 
-<!-- ---------------------------------------------------------------------------
-     VIDEO COMPARISON -- placeholder.
+![Our token classifier and the released TokenHMR model on the same clip](docs/media/gymnasts_ours_vs_upstream.gif)
 
-     Produce it with:
-         thesis compare-video
-     which writes docs/media/gymnasts_ours_vs_upstream.gif (target: under 4 MB)
-     and results/compare/gymnasts_ours_vs_upstream.mp4.
-
-     Then delete the placeholder block below and uncomment this line:
-     ![Our token classifier against the released TokenHMR model](docs/media/gymnasts_ours_vs_upstream.gif)
-     --------------------------------------------------------------------------- -->
-
-> **[ Video comparison goes here ]**
->
-> Side by side on `demo_sample/video/gymnasts.mp4`: this thesis's token classifier
-> (`chain_st`) on the left, the released TokenHMR model on the right. Person detection and
-> tracking run once and both models receive the identical boxes and frames, so the only
-> difference between the two panels is the pose model.
+Both panels come from one run of `thesis compare-video`. Person detection and tracking
+run once and both models receive the identical boxes and frames, so the only difference
+between them is the pose model. The error under the left panel is this model's EMDB
+PA-MPJPE, read from the provenance manifest; no such number is shown for the released
+model, since this work did not measure it under the same protocol.
 
 ---
 
