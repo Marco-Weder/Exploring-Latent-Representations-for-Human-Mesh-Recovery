@@ -102,7 +102,8 @@ if __name__ == '__main__':
     import argparse
     from pathlib import Path
 
-    _default_ckpt = (Path(__file__).resolve().parent
+    # This file sits in tools/, so the repository root is one level up.
+    _default_ckpt = (Path(__file__).resolve().parent.parent
                      / 'external/tokenhmr/data/checkpoints/tokenizer.pth')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--ckpt', type=Path, default=_default_ckpt,
