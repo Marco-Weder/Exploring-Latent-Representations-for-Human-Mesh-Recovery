@@ -26,7 +26,10 @@ class BrowserSafeRequest(urllib.request.Request):
 urllib.request.Request = BrowserSafeRequest
 
 # 3. Set up the paths
-submodule_root = os.path.abspath("external/tokenhmr")
+# tools/ sits one level below the repository root.
+submodule_root = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "external", "tokenhmr")
 os.chdir(submodule_root)
 sys.path.insert(0, os.path.join(submodule_root, "tokenhmr"))
 

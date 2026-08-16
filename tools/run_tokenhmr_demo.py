@@ -13,7 +13,10 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 # 2. Set up the paths
 # Change directory so relative paths (like 'demo_sample/images/') work perfectly
-submodule_root = os.path.abspath("external/tokenhmr")
+# tools/ sits one level below the repository root.
+submodule_root = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "external", "tokenhmr")
 os.chdir(submodule_root)
 
 # Add the inner 'tokenhmr' folder to sys.path so 'import lib' works inside demo.py

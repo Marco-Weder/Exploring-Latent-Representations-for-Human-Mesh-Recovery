@@ -2,8 +2,8 @@ import torch
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 # Make sure these imports match your exact project structure
-from external.tokenhmr.tokenhmr.lib.utils.rotation_utils import rotation_6d_to_matrix
-from external.tokenhmr.tokenization.models.vanilla_pose_vqvae import EncodeTokens, DecodeTokens, body_model
+from tokenhmr.lib.utils.rotation_utils import rotation_6d_to_matrix
+from tokenization.models.vanilla_pose_vqvae import EncodeTokens, DecodeTokens, body_model
 
 def save_obj(vertices, faces, filename="frankenstein_output.obj"):
     """Saves the 3D mesh to an OBJ file without needing extra libraries."""
